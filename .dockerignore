@@ -1,0 +1,16 @@
+data/
+.venv/
+.git/
+analysis/
+replay/
+tools/
+docs/
+tests/
+scripts/
+yeno-starter-kit/
+__pycache__/
+**/__pycache__/
+*.pyc
+**/*.pyc
+*.md
+*.sha256
