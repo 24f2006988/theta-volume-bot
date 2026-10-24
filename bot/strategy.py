@@ -5,6 +5,8 @@ fees at base on 24 h of real books, 200+ markets/day). The objective is P(qualif
 - Entry: flat, target not reached, reference final and fresh. The favoured outcome (by BTC mid vs
   target) has its best ask in [min_ask, max_ask] and passes the +2c sizing-headroom rule. BUY
   min(cash, $5) fee-inclusive.
+- v1-E sell-side depth gate (min_bid_depth): the favourite's best bid must hold at least as many shares as
+  we would buy, so the exit has a buyer. Same results as v1-D on our 8 recorded days.
 - Exit: SELL once secondsToClose <= exit_s2c (hold to the deadline), or at once if the position
   belongs to another market. Optional stop: SELL when the best bid falls below stop_bid.
 - Stateless: entries need secondsToClose > exit_s2c + 2, so after the deadline exit the same market
@@ -27,9 +29,10 @@ class Params:
     max_entry_s2c: float = 300.0    # enter at any time in the window
     exit_s2c: float = 50.0          # SELL from 50 s before close (exits at 18-35 s got stuck on day 1)
     stop_bid: float = 0.80          # SELL at once if the best bid falls below this
+    min_bid_depth: float = 0.0      # > 0: enter only if the favourite's best bid holds >= this x the shares we would buy
 
 
-DEFAULT = Params()
+DEFAULT = Params(min_bid_depth=1.0)  # v1-E = v1-D + a 1x sell-side depth gate (Builderr hint, 2026-10-24)
 
 
 def _best(book: dict[str, Any], side: str) -> float | None:
@@ -65,6 +68,10 @@ def propose(obs: dict[str, Any], p: Params = DEFAULT) -> dict[str, Any]:
     min_size = _finite(book.get("minOrderSize"))
     if amount <= 0 or min_size is None or not sizing_ok(levels(book.get("asks"), reverse=False), amount, min_size):
         return hold()
+    if p.min_bid_depth > 0:
+        bids = levels(book.get("bids"), reverse=True)
+        if not bids or bids[0][1] < p.min_bid_depth * amount / ask - 1e-9:
+            return hold()
     return {"action": "BUY", "outcome": outcome, "maxCashUsd": amount}
 
 
